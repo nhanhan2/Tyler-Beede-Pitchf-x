@@ -1,0 +1,706 @@
+---
+title: "Tyler Beede Project"
+author: "Nick Hanhan"
+date: "5/26/2020"
+output: html_document
+---
+
+![Tyler Beede Project](Downloads/Tyler Beede.jpeg)
+```{r}
+#open up baseballr
+library(baseballr)
+library(dplyr)
+library(tidyr)
+#lookup player id for beede
+playerid_lookup("Beede")
+#create a dataframe called beede by scraping statcast data from 2019 
+beede <- scrape_statcast_savant(start_date = "2019-04-06", end_date = "2019-10-15", playerid = 595881, player_type='pitcher')
+```
+```{r}
+beede <- beede %>% rename(px = plate_x)
+beede <- beede %>% rename(pz = plate_z)
+```
+For this project, I used the baseballr package and look at Tyler Beede's 2019 season stats. I wanted to specifically look at Tyler Beede because I have had a few interactions with him while preparing mounds at Oracle while with the groundscrew. Thus, I wanted to take a deep look at why he shows signs of being a good pitcher, but also has rough stretches.
+
+
+```{r}
+#lookup how many rows beede has
+
+nrow(beede)
+#subset dataframe to have only complete cases of pitch speed
+beede <- subset(beede, !is.na(release_speed))
+#make game data into a date column
+beede$game_date <- as.Date(beede$game_date)
+library(dplyr)
+library(tidyr)
+#seperate the date column into a year month and day column
+beede <- separate(beede, game_date, 
+                  into = c("year", "month", "day"),
+                  sep = "-", FALSE)
+#make these columns numeric
+beede$year <- as.numeric(beede$year)
+beede$day <- as.numeric(beede$day)                  
+beede$month <- as.numeric(beede$month)
+#make a new column of beede in month july or other month
+beede$july <- ifelse(beede$month == 7, "july", "other")
+summary(factor(beede$july))
+```
+All we did here was get rid of rows that didn't have values. I also seperated the game dates into a month, day, and year column, while making them numeric values. Next line I made a new variable indicating if Beede pitched in July. I chose July because statistically he had the best month of the season going 2-2 with a 3.34 era in 5 starts.
+
+
+```{r}
+#plot release speed for beede
+hist(beede$release_speed)
+#create two dataframes one if beede is pitching in july or not
+#Chose July because he pitched the best in July
+beede_july <- subset(beede, beede$july=="july")
+beede_other <- subset(beede, beede$july == "other")
+par(mfrow = c(1, 2))
+#plot both speeds, maybe there is some indicators for his performance
+hist(beede_july$release_speed)
+hist(beede_other$release_speed)
+```
+These are histograms of Beede's release speeds in July vs other months of 2019. Proportionally, looks like Beede threw with a lower mean velocity.
+
+
+```{r}
+#new datasets looking at beede's fastballs for july and other months 
+july_ff <- subset(beede_july, pitch_type == "FF")
+other_ff <- subset(beede_other, pitch_type == "FF")
+par(mfrow=c(1,2))
+hist(july_ff$release_speed)
+hist(other_ff$release_speed)
+
+```
+Here is a side by side chart of fastball speeds in july vs the other months in 2019. Beede threw a lot more pitches, but never threw over 96 in July, while he did reach 97 and 98 in a different month. We can break this down more to look at the averages to confirm if he threw his fastball harder in July.
+
+
+```{r}
+#plot the release speeds of his fastballs with a mean line on both
+hist(other_ff$release_speed,
+     col = "#00009950", freq = FALSE,
+     ylim = c(0, .35), xlab = "Velocity (mph)",
+     main = "Beede 4-Seam Fastball Velocity")
+abline(v=mean(other_ff$release_speed, 
+              col = "#0000950", freq=FALSE))
+#mean fastball higher in other months, lower in July 
+hist(july_ff$release_speed,
+     col = "#99000050", freq = FALSE,
+     ylim = c(0, .35), xlab = "Velocity (mph)",
+     main = "Beede July 4-Seam Fastball Velocity")
+abline(v=mean(july_ff$release_speed, 
+              col = "#0000950", freq=FALSE))
+
+
+```
+These are the charts with a line of the average velocity for their respective months. In July, he threw his fastball with an average of 93.8 mph, while in the other months he averaged 94.4 mph. Although only a slight difference, this is more likely due to some wear and tear in the arm during the All star Break
+
+
+```{r}
+#look at mean pitch speeds and mean ff speeds for july and other months
+tapply(beede$release_speed, beede$july, mean)
+beede_ff <- subset(beede, beede$pitch_type== "FF")
+head(beede_ff)
+ff_velo_month <- tapply(beede_ff$release_speed, beede_ff$july, mean)
+print(ff_velo_month)
+library(dplyr)
+
+```
+Found mean fastball speeds for july and other months, July being 93.8 like stated above and other months he averaged out at 94.4 mph.
+
+
+```{r}
+ff_dt <- data.frame(tapply(beede_ff$release_speed, beede_ff$game_date, mean))
+print(ff_dt)
+```
+In this, I looked at mean fastball speeds for all his starts, the highest coming on his september 20th game, and his first start on May 3rd. Keep in mind, on May 3rd, he got roughed up a little bit playing against the reds and allowing 7 runs in 2.1/3 IP. In July, while performing at his best, was barely able to crack 94mph on average in his starts.
+
+
+```{r}
+#Create game date in ff dataframe
+ff_dt$game_date <- as.Date(row.names(ff_dt), "%Y-%m-%d")
+#Rename first column 
+colnames(ff_dt)[1] <- "release_speed"
+#Remove row  names 
+row.names(ff_dt) <- NULL
+head(ff_dt)
+
+```
+Means by game date shown above.
+
+
+```{r}
+plot(ff_dt$release_speed ~ ff_dt$game_date,
+     lwd =4, type = "l", ylim = c(89,97), 
+     main = "Beede 4-Seam Fastball Velocity",
+     xlab = "Date", ylab = "Velocity (mph)")
+
+points(beede_ff$release_speed ~ jitter(as.numeric(beede_ff$game_date)),
+       pch = 16, col = "#99004450")
+
+
+```
+This is a plot of the averages as well as heatmaps of the fastballs thrown. His largest average came in May and September, smallest averages were July and beginning and middle of August.
+
+
+```{r}
+table(beede$pitch_type)
+table(beede$pitch_type, beede$month)
+prop.table(table(beede$pitch_type, beede$month), margin =2)
+type_tab2 <- prop.table(table(beede_july$pitch_type, beede_july$month), margin =2)
+```
+This is a proportion table of the pitches Beede threw each month. His percentage in fastball stays pretty consistent, but falters off in July and September. Something intriguing to me was that he stopped throwing his changeup as much after June. Having not thrown a single slider in May, looks like he developed that pitch more and got more comfortable with it. He threw it the most in July and September, his two best months, while also throwing his fastball less. Tyler also had a really high hard hit percentage in 2019, his best two months were July and September, where he threw more offspeed pitches. 
+
+Tyler's best pitch is obviously his curveball, hitters hit .159 off of it in 2019. In Kerry Crowley's article, he mentions the use of analytics in Stephen Strasburg's dominant postseason, especially against the Astros. Strasburg usually throws his fastball around 28% of his total pitches, which he hovered over in the postseason as well. Before investigating more, Beede may find more success throwing his offspeed pitches off of his fastball, especially in different counts. 
+
+Something else that caught my eye was Beede's uptick in 4 seam velocity in September, which usually doesn't happen. This may have been due to throwing it less and having the ability to throw it harder still. If Beede takes an approach like Stephen Strasburg, throwing more offspeed for strikes, this may give him an ability to catch hitters off guard when he does throw heat, hitters hit .285 off of it in 2019.
+
+```{r}
+type_tab <- table(beede$pitch_type, beede$july)
+print(type_tab)
+type_prop <- round(prop.table(type_tab, margin = 2), 3)
+print(type_prop)
+
+#September 
+beede$september <- ifelse(beede$month == 9, "september", "other")
+
+type_tab <- table(beede$pitch_type, beede$september)
+print(type_tab)
+type_prop <- round(prop.table(type_tab, margin = 2), 3)
+print(type_prop)
+```
+In September, he used his curveball, statistically his best pitch a lot more. His breaking pitches got a 50% swing and miss rate in 2019, 2nd behind Blake Snell. Overall, he threw much more off-speed in July and September compared to other months.
+
+```{r}
+ff_prop <- type_prop[3,]
+print(ff_prop)
+print(ff_velo_month)
+```
+
+
+
+```{r}
+# Pitch mix tables-changes in pitching rates 
+# Create the Difference column
+Pitch <- c("CH", "CU", "FF", "FT", "SL")
+july <- c(0.155, 0.091,0.553,0.000,0.201)
+other <- c(0.196, 0.152, 0.564,0.001,0.087)
+type_prop_df <- data.frame(Pitch, july, other)
+type_prop_df$Difference <- (type_prop_df$july - type_prop_df$other) / type_prop_df$other
+
+september <- c(0.139, 0.155, 0.522, 0.000, 0.184)
+other2 <- c(0.198, 0.133, 0.570, 0.001, 0.098)
+type_prop_df2 <- data.frame(Pitch, september, other2)
+type_prop_df2$Difference <- (type_prop_df2$september - type_prop_df2$other) / type_prop_df2$other
+
+
+# Print the type_prop
+type_prop_df
+
+# Plot a barplot
+barplot(type_prop_df$Difference, names.arg = type_prop_df$Pitch, 
+        main = "Pitch Usage in July vs. Other Months", 
+        ylab = "Percentage Change in July", 
+        ylim = c(-1, 1))
+
+type_prop_df2
+
+barplot(type_prop_df2$Difference, names.arg = type_prop_df2$Pitch, 
+        main = "Pitch Usage in September vs. Other Months", 
+        ylab = "Percentage Change in September", 
+        ylim = c(-1, 1))
+```
+July: Visually shown here is a percentage change in the pitches he threw in July compared to the other months. This is just reinforcing what we saw with the proportions. He threw his 4-seam a very small amount less, as well as throwing his changeup and curveball less. He threw his slider significantly more in July. 
+
+September: In September, He threw his fastball and changeup less, but threw his breaking pitches: curveball and slider more. Throwing his offspeed pitches more have shown to have more success, especially when throwing them for strikes, rather than throwing for swing and misses. In 2019, Beede allowed 16 of his 22 homeruns allowed on his fastball, above the league average of 14. 
+
+
+
+```{r}
+# Create bs_table
+bs_table <- table(beede$balls, beede$strikes)
+
+
+# Create bs_prop_table
+bs_prop_table <- round(prop.table(bs_table),3)
+
+# Print bs_prop_table
+print(bs_prop_table)
+
+# Print row sums
+print(rowSums(bs_prop_table))
+#Percentage of pitches thrown with different amounts of balls in the count
+
+# Print column sums
+print(colSums(bs_prop_table))
+#Pitches Beede throws in different counts 
+#Percentage of pitches thrown with different amounts of balls in the count
+```
+In this chart, it shows the percentage of times he is throwing with different counts, 26.3% of pitches thrown in 2 and 3 ball counts, allowing for more hitter friendly counts. According to baseball savant, meatball % is a stat that calculates a percentage of pitches being classified as a "meatball". Usually means a pitch right down the middle that is easily barrelled up by a hitter. Tyler Beede had a 8.4% meatball %, the league average was 7%, this could be due to being in a lot of hitter friendly counts.
+
+
+```{r}
+# Create bs_count
+beede$bs_count <- paste(beede$balls, beede$strikes, sep = "-")
+#Combines balls and counts into single column
+# Print the first 6 rows of beede
+head(beede)
+```
+Created a ball and strike count column
+
+
+```{r}
+# Create bs_count_tab
+bs_count_tab <- table(beede$bs_count, beede$july)
+bs_count_tab2 <- table(beede$bs_count, beede$september)
+
+# Create bs_month
+bs_month <- round(prop.table(bs_count_tab,margin =2),3)
+bs_month2 <- round(prop.table(bs_count_tab2, margin =2),3)
+
+# Print bs_month
+print(bs_month)
+print(bs_month2)
+#percentage change in rate at which Beede puts himself in these counts 
+```
+July: In July, Beede got into less 2 ball and 3 ball counts, usually considered great hitters counts. He did get a few more 0-1 and 0-2 counts, showing he was perhaps a bit more aggresive compared other months. 
+
+September: In September, Beede actually got into more hitter friendly counts, which is interesting considering his success, although this may be due to him throwing more offspeed in September. Offspeed pitches are more difficult to control compared to his fastball.
+
+
+```{r}
+# Create diff_bs
+diff_bs <- round(((bs_month[,1]-bs_month[,2])/bs_month[,2]),3)
+
+# Print diff_bs
+print(diff_bs)
+
+#how common each ball-strike count was in July vs Other Months 
+# Create a bar plot of the changes
+barplot(diff_bs, main = "Ball-Strike Count Rate in July vs. Other Months", 
+        ylab = "Percentage Change in July", ylim = c(-0.3, 0.3), las = 2)
+```
+This is the visual plot of percentage changes in pitch counts, decline in 3 ball counts which is good news. There is also a decrease in 2 ball counts overall, leaving him with an advantage in the counts. The increase in 0-1 and 0-2 counts are also a reason for part of his successful July.
+
+
+```{r}
+# Create diff_bs
+diff_bs2 <- round(((bs_month2[,2]-bs_month2[,1])/bs_month2[,1]),3)
+
+# Print diff_bs
+print(diff_bs2)
+
+#how common each ball-strike count was in July vs Other Months 
+# Create a bar plot of the changes
+barplot(diff_bs2, main = "Ball-Strike Count Rate in September vs. Other Months", 
+        ylab = "Percentage Change in September", ylim = c(-0.3, 0.3), las = 2)
+```
+This is the plot for September, a big increase in 2 ball and 3 ball counts. Most likely, this is due to throwing more curveballs and sliders as these pitches are meant to get the batter to bite and get them off balance.
+
+
+```{r}
+#Taking a look at Beede throwing certain pitches in certain counts more often or less often
+# Create type_bs
+type_bs <- table(beede$pitch_type, beede$bs_count)
+
+# Print type_bs
+print(type_bs)
+
+# Create type_bs_prop
+type_bs_prop <- round(prop.table(type_bs,margin =2),3)
+
+# Print type_bs_prop
+print(type_bs_prop)
+```
+This is the percentage of pitches thrown in each count for 2019. I am not a Major League hitter, but if I can work a 2 ball or 3 ball count, I'll just sit on the fastball. Also interesting that he throws a fastball 62% of the time in 0-0 counts, another 11% if include a cutter, a fastball variation. Comparatively, in 1-0 counts and 2-0 counts, he throws his changeup more compared to 0-0 counts.
+
+
+```{r}
+# Create the late_in_game column
+#Table indicates pitches thrown late in the game, past 5th inning 
+beede$late_in_game <- ifelse(beede$inning > 5, 1, 0)
+
+# Convert late_in_game
+beede$late_in_game <- factor(beede$late_in_game)
+
+# Create type_late
+type_late <- table(beede$pitch_type, beede$late_in_game)
+
+# Create type_late_prop
+type_late_prop <- round(prop.table(type_late, margin = 2), 3)
+
+# Print type_late_prop
+type_late_prop
+```
+This chart denotes 0 for early in the game and 1 for late in the game. I wanted to see if Tyler was changing his pitches late in the game or not. For today's game of baseball, I consider past the 5th inning to be late. One notable difference is he throws his fastball 61%  of the time late in the game, basically straying away from his off-speed. He also throws his best two pitches: his changeup and his curveball less late in the game. 
+
+
+```{r}
+# Create t_type_late
+t_type_late <- t(type_late_prop)
+
+# Print dimensions of t_type_late
+dim(t_type_late)
+
+# Print dimensions of type_late
+dim(type_late)
+
+# Change row names
+rownames(t_type_late) <- c("Early", "Late")
+
+# Make barplot using t_type_late
+barplot(t_type_late, beside = TRUE, col = c("red", "blue"), 
+        main = "Early vs. Late In Game Pitch Selection", 
+        ylab = "Pitch Selection Proportion", 
+        legend = rownames(t_type_late))
+```
+This is a proportion chart of early and late game pitch selections. As noted before, he throws his fastball more late in the game, and throws his off-speed less. Sticking with his better pitches like his curveball or his changeup can get batters guessing more rathering than sitting on his fastball.
+
+
+```{r}
+# Calculate average pitch height in inches in July vs. other months
+tapply(beede$pz, beede$july, mean) * 12
+
+
+beede_lhb <- subset(beede, stand == "L")
+
+
+beede_rhb <- subset(beede, stand == "R")
+
+# Compute average px location for LHB
+tapply(beede_lhb$px, beede_lhb$july, mean) * 12
+
+# Compute average px location for RHB
+tapply(beede_rhb$px, beede_rhb$july, mean) * 12
+#Noting that negative px refers to outside half pitches to LHB, while positive px refers to outside half pitches to RHB, 
+```
+Essentially here we calculated the average px locations for each side hitter. Px is the horizontal location of the pitch, a negative px referes to outside pitches to left handed batters, while positive px refers to outside pitches to right handed batters. Averages came out different for July for average px locations, a big difference looking at outside pitches for righties in July at 3.13 compared to other months average of 4.35. 
+
+
+```{r}
+# Plot location of all pitches
+plot(beede$pz ~ beede$pz,
+     col = factor(beede$july),
+     xlim = c(-3, 3))
+
+# Formatting code, don't change this
+par(mfrow = c(1, 2))
+
+# Plot the pitch loctions for July
+plot(pz ~ px, data = beede_july,
+     col = "red", pch = 16,
+     xlim = c(-3, 3), ylim = c(-1, 6),
+     main = "July")
+
+# Plot the pitch locations for other months
+plot(pz ~ px, data = beede_other,
+     col = "black", pch = 16,
+     xlim = c(-3, 3), ylim = c(-1, 6),
+     main = "Other months")
+```
+This was an interesting graph of pitches that Beede threw in July and other months. The boundaries of the strike zone are -2 to 2 for px and 1 to 4 for pz. 
+
+![Baseball Savant Strike Zone Zones](Downloads/Statcast zone.png)
+```{r}
+# Create beede_sub
+beede_sub <- subset(beede, px > -2 & px < 2 &
+                        pz > 0 & pz < 5)
+
+```
+
+
+```{r}
+# Create zone_prop_july
+zone_prop_july <- round(
+  table(beede_sub$zone[beede_sub$july == "july"]) /
+    nrow(subset(beede_sub, july == "july")), 3)
+
+# Create zone_prop_other
+zone_prop_other <- round(
+  table(beede_sub$zone[beede_sub$july == "other"]) /
+    nrow(subset(beede_sub, july == "other")), 3)
+
+# Print zone_prop_july
+zone_prop_july
+
+# Print zone_prop_other
+zone_prop_other
+
+# Fix zone_prop_july vector, don't change this
+zone_prop_july2 <- c(zone_prop_july[1:3], 0.00, zone_prop_july[4:14])
+names(zone_prop_july2) <- c(1:14)
+
+# Create zone_prop_diff
+zone_prop_diff <- zone_prop_july - zone_prop_other
+
+# Print zone_prop_diff
+zone_prop_diff
+```
+These charts here denote the proportions of times Beede threw to each zone. Beede threw most to zone 13 and 14 in July which are low and away or low and in. He also threw more in zone 5 compared to other months, which is down the middle.
+
+```{r}
+# Create beede_zone_tab
+beede_zone_tab <- table(beede_sub$zone, beede_sub$bs_count)
+
+# Create zone_count_prop
+zone_count_prop <- round(prop.table(beede_zone_tab, margin = 2), 3)
+
+# Print zone_count_prop
+zone_count_prop
+```
+This is a percentage of pitches thrown in different zones in different counts. Beede throws a lot of pitches out of the zone on 2 strike counts, even 3-2 which is intereseting. I wanted to key in on 1-1 counts and 2-2 counts, these usually are key counts within a game or even inning. Looking at 1-1 counts it looks like he throws a lot up and in/ or up and away, or low and away/ low and in. Probably trying to throw a fastball up or drop a curveball/ changeup in the bottom half on these counts. To open an at bat, he throws a pitch down the middle 11% of the time, something to note if I'm going up there to hit off Beede. Beede's favorite zones are 11 and 14.
+
+
+```{r}
+# Create zone_count_diff
+#Looking at 0-2 counts with 3-0 counts
+zone_count_diff <- zone_count_prop[, 3] - zone_count_prop[, 10]
+
+# Print the table
+zone_count_diff
+```
+I wanted to break it down for different counts now, and look at the difference between an 0-2 count and a 3-0 count. Clearly doesn't want to throw down the middle on 0-2, but he does extend the strike zone more on 0-2 denoted by the positive variables on zones 11-14.
+
+
+```{r}
+library(pitchRx)
+strikeFX(beede)
+
+strikeFX(beede, color = "type", point.alpha = 0.1,
+         adjust = TRUE, contour = TRUE) + facet_grid(pitch_type ~ stand) + 
+  theme(legend.position = "right", legend.direction = "vertical") +
+  coord_equal() + theme_bw()
+
+```
+This next part is playing with heat maps on pitch locations, they denote a ball, strike, and ball in play(x). Shows visually where he throws his fastballs usually. Also shows that he mostly throws changeups and curveballs away to lefties, I assume this is because he plays at Oracle Park, which is quite difficult to hit a ball opposite field to left field as a lefty. With righties, he throws his slider away most of the time, while with lefties, it seems he throws all over the middle and lower portions of the zone.
+
+
+```{r}
+strikeFX(beede, color = "type", point.alpha = 0.2,
+         adjust = TRUE, contour = TRUE) + facet_grid(. ~ stand) + 
+  theme(legend.position = "right", legend.direction = "vertical") +
+  coord_equal() + theme_bw()
+
+```
+This is a blown up image of Beede's heat maps ve lefties and righties. The middle circle shows the higher proportion of pitches going there, and expand outwards. When he faces lefties, the majority of pitches are outside, shown by the circle on the graph, while with righties he's more down the middle or outside.
+
+
+
+
+```{r}
+strikeFX(beede, color = "type", point.alpha = 0.1,
+         adjust = TRUE, contour = TRUE) + facet_grid(pitch_type ~ bs_count) + 
+  theme(legend.position = "right", legend.direction = "vertical") +
+  coord_equal() + theme_bw()
+```
+This is a heatmap for all different counts and all pitches. This can be broken down for scouting reports i.e. for hitters stance. His curveball seems to be all over the zone, but with 2-2 counts, looks like he really works to keep the pitch low in the zone to get a swing.
+
+
+```{r}
+# Create batter_swing
+no_swing <- c("ball", "called_strike", "swinging_strike", "hit_by_pitch")
+beede_ff$batter_swing <- ifelse(beede_ff$description %in% no_swing, 0, 1)
+
+# Create swing_ff
+swing_ff <- subset(beede_ff, batter_swing == 1)
+
+# Create the contact variable
+no_contact <- c("swinging_strike")
+swing_ff$contact <- ifelse(swing_ff$description %in% no_contact, 0, 1)
+
+# Create velo_bin: add one line for "Fast"
+swing_ff$velo_bin <- ifelse(swing_ff$release_speed < 93.5, "Slow", NA)
+
+swing_ff$velo_bin <- ifelse(swing_ff$release_speed >= 93.5 & swing_ff$release_speed < 95.5, 
+  "Medium", swing_ff$velo_bin)
+
+swing_ff$velo_bin <- ifelse(swing_ff$release_speed >= 95.5, 
+  "Fast", swing_ff$velo_bin)
+
+beede$batter_swing <- ifelse(beede$description %in% no_swing, 0,1)
+swings <- subset(beede, batter_swing == 1 )
+
+# Aggregate contact rate by velocity bin
+tapply(swing_ff$release_speed, swing_ff$velo_bin, mean)
+```
+
+
+
+```{r}
+
+# Create a new function called bin_pitch_speed() for use in calculating velo_bin.
+bin_pitch_speed <- function(x) {
+  cut(x, breaks = quantile(x, probs = c(0,1/3,2/3,1)), labels = FALSE)
+  }
+
+
+# Create the subsets for each pitch type
+swing_ff <- subset(swings, pitch_type == "FF")
+swing_ch <- subset(swings, pitch_type == "CH")
+swing_cu <- subset(swings, pitch_type == "CU")
+swing_ft <- subset(swings, pitch_type == "FT")
+swing_sl <- subset(swings, pitch_type == "SL")
+
+swing_ff$velo_bin <- bin_pitch_speed(swing_ff$release_speed)
+swing_ch$velo_bin <- bin_pitch_speed(swing_ch$release_speed)
+swing_cu$velo_bin <- bin_pitch_speed(swing_cu$release_speed)
+swing_sl$velo_bin <- bin_pitch_speed(swing_sl$release_speed)
+
+
+# Print quantile levels for each pitch
+thirds <- c(0, 1/3, 2/3, 1)
+quantile(swing_ff$release_speed, probs = thirds)
+quantile(swing_ch$release_speed, probs = thirds)
+quantile(swing_cu$release_speed, probs = thirds)
+quantile(swing_sl$release_speed, probs = thirds)
+
+#Took out two seam fastballs, very minimal amount thrown, not helpful
+```
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+nl_west <-c("LAD", "SD", "COL", "ARI")
+beede_nl_west <- ifelse(beede$home_team %in% nl_west, 0,1) & ifelse(beede$away_team %in% nl_west,0,1)
+beede_nl_west <- subset(beede, beede_nl_west == 0)
+beede_away <- subset(beede, beede$away_team == "SF")
+beede_home <- subset(beede, beede$home_team == "SF")
+
+```
+Created new datasets of Beede vs the NL West, Giants playing at home and Giants playing on the road 
+
+```{r}
+beede_away_ff <- subset(beede_away, beede_away$pitch_type == "FF")
+beede_home_ff <- subset(beede_home, beede_home$pitch_type == "FF")
+mean(beede_away_ff$release_speed)
+mean(beede_home_ff$release_speed)
+
+ff_velo_home <- tapply(beede_home_ff$release_speed, beede_home_ff$game_date, mean)
+print(ff_velo_home)
+```
+Broke it down ever more, Beede's velocity really took a dip in late June and early July, as well as in August. He bounced back really well and even threw harder in September. 
+
+
+```{r}
+ff_velo_away <- tapply(beede_away_ff$release_speed, beede_away_ff$game_date, mean)
+print(ff_velo_away)
+
+```
+Not really much of a difference, but still the same trend with what we saw with velocity dipping in July and increasing in September 
+
+
+```{r}
+# Create bs_count_tab
+bs_count_home <- table(beede_home$bs_count, beede_home$month)
+
+# Create bs_month
+bs_month_home <- round(prop.table(bs_count_home,margin =2),3)
+
+# Print bs_month
+print(bs_month_home)
+#percentage change in rate at which Beede puts himself in these counts 
+
+# Create bs_count_tab
+bs_count_away <- table(beede_away$bs_count, beede_away$month)
+
+# Create bs_month
+bs_month_away <- round(prop.table(bs_count_away,margin =2),3)
+
+# Print bs_month
+print(bs_month_away)
+
+#percentage change in rate at which Beede puts himself in these counts 
+```
+These two charts are proportions of counts Beede is in. The top is the home chart and the bottom is the away games chart. These are also broken down by month. There may be a trend in Beede getting in more friendly counts by looking at it monthly, but in baseball, I wanted to account for as much different game characteristics as possible like home and away games.
+
+
+```{r}
+table(beede_home$pitch_type)
+table(beede_home$pitch_type, beede_home$month)
+prop.table(table(beede_home$pitch_type, beede_home$month), margin =2)
+type_tab2 <- prop.table(table(beede_home$pitch_type, beede_home$month), margin =2)
+
+```
+This is a chart with totals in pitches thrown broken down by months for only home games. This also shows proportionally the pitches thrown in home game only.
+
+
+```{r}
+table(beede_away$pitch_type)
+table(beede_away$pitch_type, beede_away$month)
+prop.table(table(beede_away$pitch_type, beede_away$month), margin =2)
+type_tab3 <- prop.table(table(beede_away$pitch_type, beede_away$month), margin =2)
+```
+This is the same chart above, except now displaying away splits only. This just looks like a lot of numbers, so we'll break both of these down into charts.
+
+
+```{r}
+barplot(type_tab3, beside = TRUE, col = c("red", "blue", "green", "yellow"), 
+        main = "Beede Away Games", 
+        ylab = "Pitch Selection Proportion", 
+        legend = rownames(type_tab3))
+
+```
+This is the graphic representation for the away games. Beede starts off the season with a very high fastball usage in his away games and it fluctuates, and by the time he gets to September, it is his lowest usage of his fastball. Beede says in Kerry Crowley's article that his might have explained his untapped velocity he found in September. After barely throwing a slider in May and June, throughout the summer he threw a lot more sliders.
+
+
+
+```{r}
+barplot(type_tab2, beside = TRUE, col = c("red", "blue", "green", "orange","yellow"), 
+        main = "Beede Home Games", 
+        ylab = "Pitch Selection Proportion", 
+        legend = rownames(type_tab2))
+```
+This is the home games graph showing the same, except he did throw his fastball more in home games than away games. This may be due to the Oracle Park factor with it being a notorious pitchers park in the National League. He also threw much more off-speed in away games when compared to home. Changeup's were the most notable difference. He threw his slider much more in July than any other month and did not even throw one in May.
+
+
+```{r}
+beede <- mutate(beede, newvar=ifelse(beede$home_team == "SF", "home", "away"))
+names(beede)[99] <- paste("location")
+tab_type <- table(beede$location, beede$pitch_type)
+type_tab_away <- prop.table(table(beede$pitch_type, beede$location), margin=2)
+print(type_tab_away)
+
+print(tab_type)
+tab_type[,-4]
+
+type_prop_dif <- round(prop.table(tab_type, margin = 2), 3)
+print(type_prop_dif)
+```
+These are the proportions comparing home and away games. The proportions on top are of his pitch arsenal during home and away games. His slider seems to be pretty much the same, while his fastball and curveball are thrown more at home than away. Also a huge difference in changeups between the home and away games.
+
+
+
+```{r}
+home <- c(0.134, 0.162,0.587,0.0012,0.116)
+away <- c(0.222, 0.120, 0.544,0.000,0.114)
+type_prop_location <- data.frame(Pitch, home, away)
+type_prop_location$Difference <- (type_prop_location$home - type_prop_location$away) / type_prop_location$away
+
+
+
+
+# Plot a barplot
+barplot(type_prop_location$Difference, names.arg = type_prop_location$Pitch, 
+        main = "Pitch Usage at Home vs. Away", 
+        ylab = "Percentage Change in Home Games", 
+        ylim = c(-1, 1))
+
+```
+```
+This is the graphical representation of the Pitch usage differences in Home games compared to away games. As mentioned, he threw his changeup a lot less and his curveball a lot more. There is minimal increases in Fastball and slider usage at home as well.
+
+
+In comparison, using baseball savant, Beede was 1-4 with a 3.75 era in 50.1 IP, while he was 4-6 with a 6.08 era in 66.2 IP. That Oracle Park advantage is a huge factor for pitchers and is one of the reasons Beede pitches better there. 
+
+Pending any new information about the new 2020 season, Tyler Beede can have a big rebound season for the San Francisco Giants. Altering his pitch usages may be a huge factor for him to find more success, similar to a Stephen Strasburg. Beede also had more success when he was in more friendly counts and walking less batters. In July, Beede had a total of 4 walks with a 3.34 era. In contrast, Beede had 17 walks in June with a 5.76 era. 
+
+I'm sure I am as eager as many others to have some sort of baseball in any form this season, but as we wait patiently, the game can still be broken down and we all can make improvements. And if there is a season, I am really looking forward to being back out there on the Giants groundscrew and hopefully seeing Tyler Beede dominate batters all year long.
+
+Credits: 
+https://www.mercurynews.com/2020/02/19/stephen-strasburg-how-sf-giants-are-using-analytics-to-change-tyler-beedes-approach-on-the-mound/, written by: Kerry Crowley
+https://baseballsavant.mlb.com/savant-player/tyler-beede-595881?stats=splits-r-pitching-mlb&season=2019
+
+
+
